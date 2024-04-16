@@ -1,0 +1,235 @@
+---
+title: "A Short Intro to `norMmix`"
+output:
+    html_document:
+        fig_caption: yes
+        theme: cerulean
+        toc: yes
+        toc_depth: 2
+vignette: >
+  %\VignetteIndexEntry{A_Short_Intro_to_norMmix}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE,
+  error = FALSE,
+  tidy = FALSE,
+  cache = FALSE
+)
+```
+
+```{r setup}
+library(norMmix)
+set.seed(2020)
+```
+
+<!-- to dev and compile (don't *show* !): -->
+```{r dev-and-compile, echo = FALSE, eval = FALSE}
+devtools::load_all()
+rmarkdown::render("~/R/Pkgs/norMmix/vignettes/A_Short_Intro_to_norMmix.Rmd")
+```
+
+## Ultra quick start
+
+This section is for those who want a quick whiff of what the package can do.
+For the proper start to this vignette, see next section.
+
+A normal mixture model is a multivariate probability distribution constructed of normal distributions and mixture weights.
+Its (probability) density and (cumulative) distribution functions (aka PDF and CDF), $f()$ and $F()$ are
+\[
+ f({\bf x}) = \sum_{k=1}^{K} \pi_k \phi({\bf x};\mu_k, \Sigma_k), \text{  and } \\
+ F({\bf x}) = \sum_{k=1}^{K} \pi_k \Phi({\bf x};\mu_k, \Sigma_k),
+\]
+
+with $\pi_k \ge 0$,  $\sum \pi_k = 1$,   and
+$\phi(\cdot; \mu_k, \Sigma_k)$  and
+$\Phi(\cdot; \mu_k, \Sigma_k)$  are
+the density and distribution function of a multivariate normal (aka *Gaussian*) distribution with
+mean $\mu_k$ and covariance matrix $\Sigma_k$.
+For details, see e.g., <https://en.wikipedia.org/wiki/Multivariate_normal_distribution> .
+
+To begin, pick your favorite dataset and how many components you want to fit.
+For the most general model, let `model="VVV"`.
+Use `claraInit` as the default method.
+
+run `norMmixMLE`:
+
+```{r}
+faith <- norMmixMLE(faithful, 3, model="VVV", initFUN=claraInit)
+```
+
+and inspect the results:
+
+```{r}
+plot(faith)
+```
+
+This is all you need to know for just the bare bones functionality of the package.
+We can also go about the whole thing the other way around, by starting out by
+defining a normal mixture from scratch.
+
+Use the `norMmix()` function; the constructor function for normal mixtures.
+
+```{r norMmix}
+w <- c(0.5, 0.3, 0.2)
+mu <- matrix(1:6, 2, 3)
+sig <- array(c(2,1,1,2,
+               3,2,2,3,
+               4,3,3,4), c(2,2,3))
+nm <- norMmix(mu, Sigma=sig, weight=w)
+plot(nm)
+```
+
+higher-dimensional plots are also possible.
+
+```{r norMmix_panels}
+plot(MW32)
+```
+This model is taken from 
+
+Marron, J. S., and M. P. Wand. “Exact Mean Integrated Squared Error.” (1992). <doi:10.1214/aos/1176348653>.
+
+All the models from this paper are provided in the package as examples.
+
+`rnorMmix()` generates data (random observations) from such distributions:
+
+```{r norMmix_data}
+x <- rnorMmix(500, nm)
+plot(nm, xlim = c(-5,10), ylim = c(-5, 12),
+     main = "500 observations from a mixture of 3 bivariate Gaussians")
+points(x)
+```
+
+`norMmixMLE()` fits a distribution to data:
+
+```{r}
+ret <- norMmixMLE(x, 3, model="VVV", initFUN=claraInit)
+ret # -> print.norMmixMLE(ret)
+```
+and the fitted object, of class `"norMixMLE"` has a nice `plot()` method:
+```{r, plot-MLE}
+plot(ret)
+```
+
+Voilà.
+
+Now again but more thorough:
+
+
+## Why this package exists:
+
+This package was originally created for the purposes of a bachelor's thesis
+from author Nicolas Trutmann. The credit for the idea rests solely with Prof.
+Martin Mächler.
+
+In brief: The current popular choice for the fitting of normal mixtures is the
+EM-algorithm; in part because of it's proven convergence.
+But, there are pathological cases where convergence slows down and, in most
+implementations of the EM-algorithm, break off.
+
+This alternative, while not without flaws, is not hampered by this particular
+shortcoming.
+
+A general reference for Mixture models and in particular a thorough explanation
+for the EM-algorithm can be found in this reference.
+
+  McLachlan, Geoffrey, and David Peel. Finite Mixture Models. PDF. Newy York: Wiley-Interscience, 2004.
+
+Our approach allows us for one, to use the Cholesky decomposition of the
+covariance matrix to cut down the number of free parameters from $p^2$ to
+$\frac{p(p-1)}{2}$, and furthermore leverage the diversity of generic optimizer
+solutions to tackle pernicious data, that might otherwise resist approximation
+by the EM-algorithm.
+
+This document is organised by the major classes in this package.
+These are the 'norMmix', 'norMmixMLE' and (soon) 'manynorMmix' classes.
+
+Of these, norMmix is the base class, that codifies a multivariate normal mixture,
+with weights, means and covariance matrices.
+
+Stacked on top of norMmix is norMmixMLE, which is the output of our main
+feature, the MLE implementation. It contains first and foremost a norMmix
+object, namely the result of the MLE. After that, it also has additional
+information about the specifics of the fitting, like number of parameters and
+sample size.
+
+## On the base class 'norMmix'
+
+* how to make a norMmix model
+
+It is easiest to introduce the tool by using the tool, so here is a quick tour:
+
+```{r}
+# suppose we wanted some mixture model, let
+mu <- matrix(1:6, 2,3)      # 2x3 matrix -> 3 means of dimension 2
+w <- c(0.5, 0.3, 0.2)       # needs to sum to 1
+diags <- c(4, 3, 5)         # these will be the entries of the diagonal of the covariance matrices (see below)
+
+nm <- norMmix(mu, Sigma=diags, weight=w)
+print(nm)
+str(nm)
+```
+
+A norMmix object is a list of 6:
+* a char denoting the model
+* a matrix of means
+* a vector of weights
+* an array of covariance matrices
+* an int: the number of components
+* an int: the number of dimensions
+
+The means and covariance matrices look like this:
+```{r}
+nm$mu
+nm$Sigma
+```
+Compare that to mu and diags defined at the start of this section.
+
+The norMmix() function serves as initializer for a norMmix object. While you
+could specify covariance matrices explicitly, norMmix() as a few nifty ways of
+constructing simpler matrices from smaller givens.
+This happens according to the dimension of the given value for the Sigma argument:
+
+
+0. for a single value `l` or NULL, norMmix() assumes all matrices to be diagonal with entries `l` or `1`, respectively.
+
+1. for a vector `v`, `norMmix()` assumes all matrices to be diagonal with the i-th matrix having diagonal entries `v[i]`.
+
+2. for a matrix `m`, `norMmix()` assumes all matrices to be diagonal with diagonal vector `m[,i]` (i.e. it goes by columns).
+
+3. an array is assumed to be the covariance matrices, given explicitly.
+
+
+### Issues with k or dim = 1
+
+**IMPORTANT ISSUE**
+
+`norMmix` does not handle 1-dimensional mixture models properly. Use `nor1mix` if that is your use case.
+
+
+## On 'norMmixMLE'
+
+Direct Maximum Likelihood Estimation (MLE) for multivariate normal mixture
+models. Performs direct likelihood maximization via `optim`.
+
+  norMmixMLE(x, k,
+           model = c("EII", "VII", "EEI", "VEI", "EVI",
+                     "VVI", "EEE", "VEE", "EVV", "VVV"),
+           initFUN = claraInit,
+           ll = c("nmm", "mvt"),
+           keep.optr = TRUE, keep.data = keep.optr,
+           method = "BFGS", maxit = 100, trace = 2,
+           optREPORT = 10, reltol = sqrt(.Machine$double.eps),
+ 	   \dots)
+
+To use `norMmixMLE`, provide a dataset `x` as a numeric `[n x p]` matrix,
+a number of components to fit, `k`, and a model from the list above.
+
+## On 'manyMLE' (as soon as we have reintegrated that)
+

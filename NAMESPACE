@@ -1,0 +1,103 @@
+### Imports ---------------------------------------------
+
+## from 'standard' packages (but not 'base')
+
+importFrom("grDevices"
+         , adjustcolor
+         , chull
+         , col2rgb
+         , extendrange
+         , rgb
+         , rainbow
+         , pdf
+         , dev.off
+           )
+
+importFrom("graphics"
+         , axis, box, boxplot
+         , frame
+         , grid
+         , legend, lines, matplot, mtext
+         , pairs
+         , par
+         , plot, plot.default, points
+         , polygon, text, title
+           )
+
+importFrom("stats", median, quantile
+         , optim, nobs
+         , plogis, qchisq, qlogis
+         , rmultinom
+         , AIC, BIC, logLik
+           )
+
+## from 'Recommended' packages:
+
+importFrom("cluster", clara)
+importFrom("MASS", mvrnorm)
+
+## from other CRAN packages :
+
+importFrom("mvtnorm", dmvnorm)
+importFrom("mclust", hclass, hcVVV)
+importFrom("sfsmisc", mult.fig)
+
+
+### This package exports ---------------------------------
+
+## "norMmix" Functions
+export(
+    clr1, clr1inv,
+    ldl
+  , ellipsePts
+     , llmvtnorm
+     , llnorMmix
+     , nMm2par
+     , norMmix
+     , norMmixMLE
+     , par2nMm
+     , dfnMm
+     , rnorMmix
+     , sllnorMmix
+     , dnorMmix
+  , npar
+  , plot2d, plotnd
+    , claraInit
+    , ssClara2kL
+    , mclVVVinit
+    , nor1toMmix
+)
+
+## all the "norMmix"  example objects <--> ./R/zmarrwandnMm.R
+export(MW21, MW22
+     , MW23, MW24, MW25
+     , MW26, MW27, MW28, MW29
+     , MW210, MW211, MW212, MW213, MW214
+     , MW215
+      ## 3-d :
+     , MW31, MW32, MW33, MW34
+      ## 5-d :
+     , MW51
+       )
+
+## misc
+export(Trubetskoy10)
+
+
+S3method(print,  norMmix)
+S3method(plot,   norMmix)
+S3method(npar,   norMmix)
+
+S3method(print,  norMmixMLE)
+S3method(plot,   norMmixMLE)
+S3method(logLik, norMmixMLE)
+S3method(nobs,   norMmixMLE)
+S3method(npar,   norMmixMLE)
+
+# for the plot.norMmix() method -- pairs() panel:
+# export(as.jmatrix)
+S3method(`[`, "jmatrix")
+S3method(as.vector, "jvector")
+
+# export(manyMLE) # not yet
+S3method(npar, manyMLE)
