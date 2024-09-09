@@ -1,7 +1,8 @@
 ## norMmix data structure
 
 
-## Auxiliary function evals to TRUE if x is sym pos def array, otherwise character string with msg
+## Auxiliary function evals to TRUE if x is sym pos def array,
+## otherwise character string with msg
 okSigma <- function(Sig, tol1 = 1000 * .Machine$double.eps, tol2 = 1e-10) {
     if (!is.numeric(Sig) || !is.array(Sig) || length(d <- dim(Sig)) != 3) {
         "is not a numeric array of rank 3"
@@ -29,6 +30,122 @@ okSigma <- function(Sig, tol1 = 1000 * .Machine$double.eps, tol2 = 1e-10) {
     }
 }
 
+
+## Auxiliary function. Asserts Covariance matrices conform to
+## model. returns TRUE or message.
+#  checks Sigma for plausibility.  Only checks if Sigma falls within
+#  model constraints, not if a weaker model could also fit.
+sigmaAgainstModel <- function(Sig,
+                              model= c("EII", "VII", "EEI", "VEI", "EVI", "VVI", "EEE", "VEE", "EVV", "VVV"),
+                              tol1 = 1000 * .Machine$double.eps,
+                              tol2 = 1e-10) {
+
+    if (!is.numeric(Sig) || !is.array(Sig) || length(d <- dim(Sig)) != 3) {
+        "is not a numeric array of rank 3"
+    } else if (prod(d) == 0) {
+        "at least one of the dimensions is zero"
+    } else { #
+        # we do not check sym pos def, as we assume okSigma has been called before.
+        k <- d[[3]]
+        p <- d[[1]]
+
+        # catch off diagonals in simple models
+        if (model %in% c("EII", "VII", "EEI", "VEI", "EVI", "VVI") && p>1) {
+            for (i in 1:k) {
+                diagi <- diag(Sig[,,i])
+                if ( max(abs(  diag(diagi) - Sig[,,i]  )) > tol2 ) {
+                    return(paste("Sigma has off-diagonal coefficients in matrix at position k=", i, "."))
+                }
+            }
+        }
+
+        switch(model,
+               "EII" = {
+                   ev <- Sig[1] # first value should be the same everywhere
+                   for (i in 1:k) {
+                       if (max(abs(ev*diag(p) - Sig[,,i])) > tol1) {
+                           # detects off-diagonal as well as on-diagonal but not the same as the others.
+                           return(paste("Sigma is not EII. offending matrix at position k=", i, "."))
+                       }
+                   }
+               },
+               "VII" = {
+                   for (i in 1:k) {
+                       ev <- Sig[1,1,i]
+                       if (max(abs(ev*diag(p) - Sig[,,i])) > tol1) {
+                           return(paste("Sigma is not VII. offending matrix at position k=", i, "."))
+                       }
+                   }
+               },
+               "EEI" = {
+                   diag1 <- diag(Sig[,,1])
+                   for (i in 1:k) {
+                       if ( max(abs(  diag(diag1) - Sig[,,i]  )) > tol2 ) {
+                           return(paste("Sigma is not EEI. offending matrix at position k=", i, "."))
+                       }
+                   }
+               },
+               "VEI" = {
+                   diag1 <- diag(Sig[,,1])
+                   for (i in 1:k) {
+                       diagi <- diag(Sig[,,i])
+                       if ( max(abs(  diag(diagi) - Sig[,,i]  )) > tol2 ) {
+                           return(paste("Sigma is not VEI. Off-diagonal entries in matrix at position k=", i, "."))
+                       }
+                       if ( var(relErrV(diag1, diagi)) > tol2 ) {
+                           return(paste("Sigma is not VEI. Matrix at k=", i, " not multiple of matrix at k=1"))
+                       }
+                   }
+               },
+               "EVI" = {
+                   det1 <- prod(diag(Sig[,,1]))
+                   for (i in 1:k) {
+                       diagi <- diag(Sig[,,i])
+                       if ( max(abs(  diag(diagi) - Sig[,,i]  )) > tol2 ) {
+                           return(paste("Sigma has off-diagonal coefficients in matrix at position k=", i, "."))
+                       }
+                       if ( abs(det1 - prod(diagi)) > tol2) {
+                           return(paste("Sigma does not have equal volume. Offending component: k=", i, "."))
+                       }
+                   }
+               },
+               "VVI" = {
+                   for (i in 1:k) {
+                       if ( max(abs(  diag(diag(Sig[,,i])) - Sig[,,i]  )) > tol2 ) {
+                           return(paste("Sigma has off-diagonal coefficients in matrix at position k=", i, "."))
+                       }
+                   }
+               },
+               "EEE" = {
+                   for (i in 1:k) {
+                       if ( max(abs( Sig[,,1] - Sig[,,i] )) > tol2 ) {
+                           return(paste("Sigma not equal. Offending component at k=", i, "."))
+                       }
+                   }
+               },
+               "VEE" = {
+                   for (i in 1:k) {
+                       if ( var(relErrV(c(Sig[,,1]), c(Sig[,,i]))) > tol2 ) {
+                           return(paste("Sigma does not have equal shape. Offending component at k=", i, "."))
+                       }
+                   }
+               },
+               "EVV" = {
+                   det1 <- det(Sig[,,1])
+                   for (i in 1:k) {
+                       if ( abs(det1 - det(Sig[,,i])) > tol2 ) {
+                           return(paste("Sigma does not have equal volume. Offending component at k=", i, "."))
+                       }
+                   }
+               },
+               "VVV" = {
+                   # nothing to do
+               },
+               paste("invalid model:", model)
+        )
+        TRUE
+    }
+}
 
 # Constructor for nMm 'objects'
 
@@ -67,11 +184,15 @@ norMmix <- function(mu,
 
     stopifnot(is.numeric(mu))
     guessModel <- missing(model) # if not specified, may guess it from {p, k, Sigma}
+    model <- if (guessModel) "VVV" else match.arg(model)
 
     if (!is.matrix(mu)) mu <- as.matrix(mu) # p x 1  typically
-    # TODO: if no Sigma is supplied might tacitly mistake px1 and 1xp; throw error
     p <- nrow(mu) # p = dimension
     k <- ncol(mu) # k = number of components
+
+    if (is.null(name)) {
+        name <- sprintf("model \"%s\", G = %s", model, k)
+    }
 
     dS <- c(p, p, k) # == dim(Sigma) {in full VVV  parametrization !}
     if (is.null(Sigma)) {
@@ -89,6 +210,7 @@ norMmix <- function(mu,
         stop("'Sigma' not among recognized formats")
     }
     if (!isTRUE(m <- okSigma(Sigma))) stop(m)
+    if (!isTRUE(m <- sigmaAgainstModel(Sigma, model))) stop(m)
 
     # inspect weight
     stopifnot(is.numeric(weight))
@@ -99,10 +221,10 @@ norMmix <- function(mu,
         stop("weight doesn't sum to 1 or isn't positive")
     }
 
-    model <- if (missing(model)) "VVV" else match.arg(model)
-    if (is.null(name)) {
-        name <- sprintf("model \"%s\", G = %s", model, k)
-    }
+    .norMmix(name, model, mu, Sigma, weight, k, p)
+}
+
+.norMmix <- function(name, model, mu, Sigma, weight, k, p) {
     structure(
         name = name,
         class = "norMmix",
@@ -129,7 +251,8 @@ is.norMmix <- function(x) {
 
 nor1toMmix <- function(object) {
     mu <- matrix(object[, 1], nrow = 1, byrow = TRUE)
-    sigma <- object[, 2]
+    k <- length(object[, 2])
+    sigma <- array(object[, 2], c(1, 1, 2))
     weights <- object[, 3]
     name <- attr(object, "name")
 

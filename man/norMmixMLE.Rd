@@ -54,7 +54,7 @@ ssClara2kL(n, k, p)
   \item{trace}{\describe{
       \item{in \code{norMmixMLE()}:}{passed to \code{optim(*, control=..)}, see above.}
       \item{in \code{claraInit()}: }{a non-negative integer indicating how
-	much \code{\link{clara}()} calls should be traced.}
+	much \code{\link[cluster]{clara}()} calls should be traced.}
   }}
   \item{\dots}{\describe{
       \item{in \code{norMmixMLE()}:}{passed to \code{optim(*, control=..)}, see above.}
@@ -91,6 +91,8 @@ ssClara2kL(n, k, p)
   By default, \code{initFUN=claraInit}, uses \code{\link[cluster]{clara}()}
   and one M-step from EM-algorithm to initialize parameters
   after that uses general optimizer \code{\link{optim}()} to calculate the MLE.
+
+  To silence the output of \code{norMmixMLE}, set \code{optREPORT} very high and \code{trace} to 0. For details on output behavior, see the "details" section of \code{\link{optim}}.
 }
 \examples{
 MW214
